@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/lukejoshuapark/mcp-proxy/config"
@@ -25,6 +28,9 @@ func main() {
 }
 
 func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -52,6 +58,24 @@ func run() error {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("listen error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
 	slog.Info("listening", "addr", cfg.ListenAddr)
-	return httpServer.ListenAndServe()
+	<-ctx.Done()
+	slog.Info("shutting down gracefully")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+
+	slog.Info("shutdown complete")
+	return nil
 }

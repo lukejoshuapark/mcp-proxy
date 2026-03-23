@@ -7,12 +7,38 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"time"
 )
 
 type clientMetadata struct {
 	ClientID     string   `json:"client_id"`
 	ClientName   string   `json:"client_name"`
 	RedirectURIs []string `json:"redirect_uris"`
+}
+
+const metadataCacheTTL = 1 * time.Minute
+
+func (s *Server) getClientMetadata(clientID string) (clientMetadata, error) {
+	s.metadataCacheMu.RLock()
+	if entry, ok := s.metadataCache[clientID]; ok && time.Now().Before(entry.expiresAt) {
+		s.metadataCacheMu.RUnlock()
+		return entry.meta, nil
+	}
+	s.metadataCacheMu.RUnlock()
+
+	meta, err := fetchClientMetadata(s.MetadataClient, clientID)
+	if err != nil {
+		return clientMetadata{}, err
+	}
+
+	s.metadataCacheMu.Lock()
+	s.metadataCache[clientID] = metadataCacheEntry{
+		meta:      meta,
+		expiresAt: time.Now().Add(metadataCacheTTL),
+	}
+	s.metadataCacheMu.Unlock()
+
+	return meta, nil
 }
 
 func fetchClientMetadata(client *http.Client, clientID string) (clientMetadata, error) {

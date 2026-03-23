@@ -35,7 +35,7 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, err := fetchClientMetadata(s.MetadataClient, clientID)
+	meta, err := s.getClientMetadata(clientID)
 	if err != nil {
 		slog.Warn("failed to fetch client metadata", "client_id", clientID, "error", err)
 		hu.Error(w, http.StatusBadRequest, "invalid_client", "failed to validate client_id metadata document")

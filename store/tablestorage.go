@@ -16,43 +16,56 @@ type tableEntity struct {
 }
 
 type TableStorageStore[T any] struct {
-	client *aztables.Client
+	client        *aztables.Client
+	encryptionKey []byte
 }
 
-func NewTableStorageStore[T any](serviceClient *aztables.ServiceClient, tableName string) (*TableStorageStore[T], error) {
+func NewTableStorageStore[T any](serviceClient *aztables.ServiceClient, tableName string, encryptionKey []byte) (*TableStorageStore[T], error) {
 	client := serviceClient.NewClient(tableName)
 
-	// Ensure the table exists.
 	_, err := client.CreateTable(context.Background(), nil)
 	if err != nil {
 		var respErr *azcore.ResponseError
 		if errors.As(err, &respErr) && respErr.ErrorCode == "TableAlreadyExists" {
-			// OK — table already exists.
 		} else {
 			return nil, fmt.Errorf("creating table %s: %w", tableName, err)
 		}
 	}
 
-	return &TableStorageStore[T]{client: client}, nil
+	return &TableStorageStore[T]{client: client, encryptionKey: encryptionKey}, nil
 }
 
-func (s *TableStorageStore[T]) Get(partitionKey, sortKey string) (T, bool) {
+func (s *TableStorageStore[T]) getEntity(partitionKey, sortKey string) (T, azcore.ETag, bool) {
 	var zero T
 	resp, err := s.client.GetEntity(context.Background(), partitionKey, sortKey, nil)
 	if err != nil {
-		return zero, false
+		return zero, "", false
 	}
 
 	var entity tableEntity
 	if err := json.Unmarshal(resp.Value, &entity); err != nil {
-		return zero, false
+		return zero, "", false
+	}
+
+	value := entity.Value
+	if s.encryptionKey != nil {
+		decrypted, err := Decrypt(value, s.encryptionKey)
+		if err != nil {
+			return zero, "", false
+		}
+		value = string(decrypted)
 	}
 
 	var v T
-	if err := json.Unmarshal([]byte(entity.Value), &v); err != nil {
-		return zero, false
+	if err := json.Unmarshal([]byte(value), &v); err != nil {
+		return zero, "", false
 	}
-	return v, true
+	return v, resp.ETag, true
+}
+
+func (s *TableStorageStore[T]) Get(partitionKey, sortKey string) (T, bool) {
+	v, _, ok := s.getEntity(partitionKey, sortKey)
+	return v, ok
 }
 
 func (s *TableStorageStore[T]) Set(partitionKey, sortKey string, value T) {
@@ -61,12 +74,21 @@ func (s *TableStorageStore[T]) Set(partitionKey, sortKey string, value T) {
 		return
 	}
 
+	valueStr := string(data)
+	if s.encryptionKey != nil {
+		encrypted, err := Encrypt(data, s.encryptionKey)
+		if err != nil {
+			return
+		}
+		valueStr = encrypted
+	}
+
 	entity := tableEntity{
 		Entity: aztables.Entity{
 			PartitionKey: partitionKey,
 			RowKey:       sortKey,
 		},
-		Value: string(data),
+		Value: valueStr,
 	}
 
 	raw, err := json.Marshal(entity)
@@ -84,9 +106,18 @@ func (s *TableStorageStore[T]) Delete(partitionKey, sortKey string) {
 }
 
 func (s *TableStorageStore[T]) Pop(partitionKey, sortKey string) (T, bool) {
-	v, ok := s.Get(partitionKey, sortKey)
-	if ok {
-		s.Delete(partitionKey, sortKey)
+	v, etag, ok := s.getEntity(partitionKey, sortKey)
+	if !ok {
+		var zero T
+		return zero, false
 	}
-	return v, ok
+
+	_, err := s.client.DeleteEntity(context.Background(), partitionKey, sortKey, &aztables.DeleteEntityOptions{
+		IfMatch: &etag,
+	})
+	if err != nil {
+		var zero T
+		return zero, false
+	}
+	return v, true
 }

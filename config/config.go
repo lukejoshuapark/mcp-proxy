@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -18,6 +19,8 @@ type Config struct {
 
 	AzureStorageAccount string `environment:"MCP_PROXY_AZURE_STORAGE_ACCOUNT,"`
 	AzureStorageKey     string `environment:"MCP_PROXY_AZURE_STORAGE_KEY,"`
+
+	EncryptionKey string `environment:"MCP_PROXY_ENCRYPTION_KEY,"`
 }
 
 func (c Config) UseTableStorage() bool {
@@ -36,5 +39,13 @@ func (c Config) Validate() error {
 	if !strings.HasPrefix(c.PublicURL, "https://") {
 		return fmt.Errorf("MCP_PROXY_PUBLIC_URL must use https scheme, got %q", c.PublicURL)
 	}
+
+	if c.EncryptionKey != "" {
+		key, err := base64.RawURLEncoding.DecodeString(c.EncryptionKey)
+		if err != nil || len(key) != 32 {
+			return fmt.Errorf("MCP_PROXY_ENCRYPTION_KEY must be a raw-URL-base64 encoded 32-byte key for AES-256")
+		}
+	}
+
 	return nil
 }

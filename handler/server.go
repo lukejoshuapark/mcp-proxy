@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/lukejoshuapark/mcp-proxy/config"
@@ -24,6 +25,15 @@ type Server struct {
 	Proxy          *httputil.ReverseProxy
 	HTTPClient     *http.Client
 	MetadataClient *http.Client
+	RateLimiter    *hu.IPRateLimiter
+
+	metadataCache   map[string]metadataCacheEntry
+	metadataCacheMu sync.RWMutex
+}
+
+type metadataCacheEntry struct {
+	meta      clientMetadata
+	expiresAt time.Time
 }
 
 type AuthSession struct {
@@ -71,17 +81,30 @@ func NewServer(
 		Proxy:          proxy,
 		HTTPClient:     hu.NewHTTPClient(),
 		MetadataClient: hu.NewSSRFSafeClient(),
+		RateLimiter:    hu.NewIPRateLimiter(100, time.Minute),
+		metadataCache:  make(map[string]metadataCacheEntry),
 	}, nil
 }
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", s.HandleHealthz)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.HandleMetadata)
 	mux.HandleFunc("GET /authorize", s.HandleAuthorize)
 	mux.HandleFunc("GET /callback", s.HandleCallback)
 	mux.HandleFunc("POST /token", s.HandleToken)
 	mux.HandleFunc("/", s.HandleProxy)
-	return securityHeaders(mux)
+
+	var h http.Handler = mux
+	h = securityHeaders(h)
+	h = hu.RateLimitMiddleware(s.RateLimiter, h)
+	h = loggingMiddleware(h)
+	return h
+}
+
+func (s *Server) HandleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
 }
 
 func securityHeaders(next http.Handler) http.Handler {

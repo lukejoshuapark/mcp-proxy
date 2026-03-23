@@ -1,24 +1,64 @@
-Make TableStorage Pop atomic. Use an ETag-based conditional delete (Azure Table Storage supports If-Match with ETags) so that only the first Pop caller succeeds and the second gets a 412 Precondition Failed.
+![mcp-proxy](./icon.png)
 
-Add a health check endpoint (/healthz or similar). Essential for container orchestration (Kubernetes liveness/readiness probes, Azure Container Apps health checks, etc.).
+# mcp-proxy
 
-Graceful shutdown. Use signal.NotifyContext + httpServer.Shutdown(ctx) so in-flight requests complete before the process exits.
+An OAuth 2.0 proxy for [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers. It sits between MCP clients and an upstream MCP server, presenting itself as an OAuth authorization server to clients while delegating actual authentication to an upstream OAuth provider.
 
-Cache client metadata documents. Currently fetched on every /authorize request. A short-lived cache (e.g. 5 minutes) would reduce latency and avoid the amplification concern.
+## How It Works
 
-Structured access logging. Successful operations are unlogged. A middleware logging method, path, status, and duration would be valuable for operational visibility.
+1. The MCP client discovers OAuth metadata at `/.well-known/oauth-authorization-server`.
+2. The client starts an authorization code flow (with PKCE) against `/authorize`.
+3. mcp-proxy validates the client's metadata document, creates a session, and redirects the user's browser to the upstream OAuth provider.
+4. After the user authenticates, the upstream provider redirects back to `/callback`.
+5. mcp-proxy exchanges the upstream authorization code for tokens, stores the token response, and redirects the client to its `redirect_uri` with a proxy-issued code.
+6. The client exchanges the proxy code at `/token` (PKCE-verified) and receives the upstream token response directly.
+7. Subsequent requests to `/` are proxied through to the upstream MCP server with the client's token intact.
 
-Critical
-The proxy endpoint performs no authentication. proxy.go:5-7 unconditionally forwards every request to the upstream MCP server. There is no Bearer token validation, no session check — nothing. The entire OAuth flow is cosmetic; an attacker can bypass it entirely by sending requests directly to the proxy's catch-all / route. This is the single most important finding.
+Refresh token requests are forwarded to the upstream token endpoint transparently.
 
-High
-Authorization code replay in distributed deployments. TableStorageStore.Pop is Get + Delete as two separate, non-atomic operations. With multiple proxy instances, two requests bearing the same authorization code can race: both Get succeeds before either Delete executes. This allows code replay, which PKCE alone doesn't prevent since the verifier is known to the attacker who initiated the flow.
+## Endpoints
 
-Token response stored in plaintext at rest. The full upstream token response (access token, refresh token, etc.) is stored as a plain JSON string in Azure Table Storage inside StoredCode. While the window is short (~10 mins), this is sensitive credential material sitting unencrypted in a shared data store.
+| Path | Description |
+|------|-------------|
+| `/.well-known/oauth-authorization-server` | OAuth 2.0 authorization server metadata |
+| `/authorize` | Authorization endpoint — begins the OAuth flow |
+| `/callback` | Receives the redirect from the upstream provider |
+| `/token` | Token endpoint — `authorization_code` and `refresh_token` grants |
+| `/` | Reverse proxy to the upstream MCP server |
+| `/healthz` | Health check — returns `200 OK` with body `ok` |
 
-Medium
-No rate limiting on any endpoint. /authorize creates store entries unconditionally. An attacker can flood the store with millions of sessions — a classic resource exhaustion DoS. No throttling exists on /token either, enabling brute-force attempts against authorization codes (though 32 bytes of randomness makes guessing impractical).
+## Configuration
 
-InMemory store never evicts expired entries. Sessions and codes that are never redeemed stay in memory forever. Only Pop (successful exchange) removes them. Over time this is an unbounded memory leak and a DoS vector.
+All configuration is via environment variables.
 
-IPv6 unique-local addresses not blocked in SSRF check. httputil.go:102-118 covers IPv4 RFC 1918, loopback, link-local, and IPv6 loopback/link-local — but misses the fc00::/7 unique-local address range (the IPv6 equivalent of RFC 1918). A client metadata URL resolving to an fd00:: address would bypass the SSRF filter.
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `MCP_PROXY_PUBLIC_URL` | The public base URL of this proxy (must use `https`). Used to build OAuth metadata, redirect URIs, and the callback URL. |
+| `MCP_PROXY_REMOTE_AUTH_URL` | Authorization endpoint of the upstream OAuth provider. |
+| `MCP_PROXY_REMOTE_TOKEN_URL` | Token endpoint of the upstream OAuth provider. |
+| `MCP_PROXY_REMOTE_CLIENT_ID` | Client ID registered with the upstream OAuth provider. |
+| `MCP_PROXY_REMOTE_CLIENT_SECRET` | Client secret for the upstream OAuth provider. |
+| `MCP_PROXY_UPSTREAM_MCP_URL` | URL of the upstream MCP server to proxy requests to. |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_PROXY_LISTEN_ADDR` | `:8080` | Address and port the HTTP server listens on. |
+| `MCP_PROXY_AZURE_STORAGE_ACCOUNT` | *(unset)* | Azure Storage account name. When set (along with `MCP_PROXY_AZURE_STORAGE_KEY`), the proxy uses Azure Table Storage for sessions and authorization codes. When omitted, an in-memory store is used — suitable for single-instance deployments and development. |
+| `MCP_PROXY_AZURE_STORAGE_KEY` | *(unset)* | Azure Storage account key. Required when `MCP_PROXY_AZURE_STORAGE_ACCOUNT` is set. |
+| `MCP_PROXY_ENCRYPTION_KEY` | *(unset)* | A 32-byte key encoded as raw-URL-base64 (no padding). When set, authorization codes stored in Azure Table Storage are encrypted at rest with AES-256-GCM. Has no effect when using the in-memory store. |
+| `MCP_PROXY_PRETTY` | *(unset)* | When set to any non-empty value, logs are emitted in human-readable text format instead of JSON. |
+
+## Security Features
+
+- **PKCE (S256)** — All authorization code exchanges require Proof Key for Code Exchange.
+- **SSRF protection** — Client metadata fetches block connections to private, loopback, link-local, and IPv6 unique-local addresses.
+- **Rate limiting** — Per-IP token-bucket rate limiter (100 requests/minute) on all endpoints.
+- **Encryption at rest** — Optional AES-256-GCM encryption for stored authorization codes in Azure Table Storage.
+- **Atomic operations** — Azure Table Storage uses ETag-based conditional deletes so authorization codes can only be redeemed once.
+- **Security headers** — All responses include `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY`.
+- **Client metadata validation** — Client `client_id` must be an HTTPS URL with a path. The metadata document at that URL must match the `client_id` and declare at least one `redirect_uri`.
+- **Structured logging** — All requests are logged with method, path, status, duration, and client IP via `log/slog`.

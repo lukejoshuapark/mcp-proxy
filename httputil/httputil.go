@@ -46,8 +46,6 @@ func VerifyPKCE(verifier, challenge string) bool {
 	return subtle.ConstantTimeCompare([]byte(computed), []byte(challenge)) == 1
 }
 
-// NewHTTPClient returns an http.Client with reasonable timeouts for
-// trusted outbound calls (e.g. to configured OAuth servers).
 func NewHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 30 * time.Second,
@@ -58,8 +56,6 @@ func NewHTTPClient() *http.Client {
 	}
 }
 
-// NewSSRFSafeClient returns an http.Client that blocks connections to
-// private/link-local/loopback IP addresses, preventing SSRF attacks.
 func NewSSRFSafeClient() *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,
@@ -114,6 +110,14 @@ func isPrivateIP(ip net.IP) bool {
 		if r.Contains(ip) {
 			return true
 		}
+	}
+
+	uniqueLocal := net.IPNet{
+		IP:   net.IP{0xfc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		Mask: net.CIDRMask(7, 128),
+	}
+	if uniqueLocal.Contains(ip) {
+		return true
 	}
 
 	return ip.Equal(net.IPv6loopback) || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
