@@ -72,6 +72,9 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	} else if scope != "" {
 		rq.Set("scope", scope)
 	}
+	if s.Config.Audience != "" {
+		rq.Set("audience", s.Config.Audience)
+	}
 	remoteURL.RawQuery = rq.Encode()
 
 	http.Redirect(w, r, remoteURL.String(), http.StatusFound)

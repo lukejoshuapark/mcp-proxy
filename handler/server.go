@@ -90,6 +90,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.HandleHealthz)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.HandleMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.HandleProtectedResourceMetadata)
 	mux.HandleFunc("GET /authorize", s.HandleAuthorize)
 	mux.HandleFunc("GET /callback", s.HandleCallback)
 	mux.HandleFunc("POST /token", s.HandleToken)

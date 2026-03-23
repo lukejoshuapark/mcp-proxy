@@ -20,7 +20,8 @@ Refresh token requests are forwarded to the upstream token endpoint transparentl
 
 | Path | Description |
 |------|-------------|
-| `/.well-known/oauth-authorization-server` | OAuth 2.0 authorization server metadata |
+| `/.well-known/oauth-authorization-server` | OAuth 2.0 authorization server metadata (RFC 8414) |
+| `/.well-known/oauth-protected-resource` | OAuth protected resource metadata (RFC 9728) |
 | `/authorize` | Authorization endpoint — begins the OAuth flow |
 | `/callback` | Receives the redirect from the upstream provider |
 | `/token` | Token endpoint — `authorization_code` and `refresh_token` grants |
@@ -51,6 +52,7 @@ All configuration is via environment variables.
 | `MCP_PROXY_AZURE_STORAGE_KEY` | *(unset)* | Azure Storage account key. Required when `MCP_PROXY_AZURE_STORAGE_ACCOUNT` is set. |
 | `MCP_PROXY_ENCRYPTION_KEY` | *(unset)* | A 32-byte key encoded as raw-URL-base64 (no padding). When set, authorization codes stored in Azure Table Storage are encrypted at rest with AES-256-GCM. Has no effect when using the in-memory store. |
 | `MCP_PROXY_SCOPES` | *(unset)* | Space-separated OAuth scopes to request from the upstream provider (e.g. `openid profile email`). When set, this value is used regardless of what the MCP client requests. When omitted, the client-supplied scope is forwarded as-is. |
+| `MCP_PROXY_REMOTE_AUDIENCE` | *(unset)* | When set, adds an `audience` query parameter to the upstream authorization URL. Required by some providers (e.g. Auth0) to identify the target API. |
 | `MCP_PROXY_PRETTY` | *(unset)* | When set to any non-empty value, logs are emitted in human-readable text format instead of JSON. |
 
 ## Security Features

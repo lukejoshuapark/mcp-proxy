@@ -19,3 +19,12 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 		"client_id_metadata_document_supported": true,
 	})
 }
+
+func (s *Server) HandleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	base := s.Config.PublicURL
+	hu.JSON(w, http.StatusOK, map[string]any{
+		"resource":                 base,
+		"authorization_servers":    []string{base},
+		"bearer_methods_supported": []string{"header"},
+	})
+}
