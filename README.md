@@ -55,6 +55,7 @@ All configuration is via environment variables.
 | `MCP_PROXY_ENCRYPTION_KEY` | *(unset)* | A 32-byte key encoded as raw-URL-base64 (no padding). When set, authorization codes stored in Azure Table Storage are encrypted at rest with AES-256-GCM. Has no effect when using the in-memory store. |
 | `MCP_PROXY_SCOPES` | *(unset)* | Space-separated OAuth scopes to request from the upstream provider (e.g. `openid profile email`). When set, this value is used regardless of what the MCP client requests. When omitted, the client-supplied scope is forwarded as-is. |
 | `MCP_PROXY_REMOTE_AUDIENCE` | *(unset)* | When set, adds an `audience` query parameter to the upstream authorization URL. Required by some providers (e.g. Auth0) to identify the target API. |
+| `MCP_PROXY_APPINSIGHTS_CONNECTION_STRING` | *(unset)* | Azure Application Insights connection string. When set, all slog output is also forwarded to Application Insights as trace telemetry. When omitted, logs go to stderr only. |
 | `MCP_PROXY_PRETTY` | *(unset)* | When set to any non-empty value, logs are emitted in human-readable text format instead of JSON. |
 
 ## Security Features

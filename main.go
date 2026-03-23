@@ -15,19 +15,21 @@ import (
 )
 
 func main() {
+	var logHandler slog.Handler
 	if os.Getenv("MCP_PROXY_PRETTY") != "" {
-		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		logHandler = slog.NewTextHandler(os.Stderr, nil)
 	} else {
-		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+		logHandler = slog.NewJSONHandler(os.Stderr, nil)
 	}
+	slog.SetDefault(slog.New(logHandler))
 
-	if err := run(); err != nil {
+	if err := run(logHandler); err != nil {
 		slog.Error("fatal", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(logHandler slog.Handler) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -38,6 +40,13 @@ func run() error {
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	if cfg.AppInsightsConnectionString != "" {
+		aiHandler := newAppInsightsHandler(cfg.AppInsightsConnectionString, logHandler)
+		defer aiHandler.Close()
+		slog.SetDefault(slog.New(aiHandler))
+		slog.Info("application insights enabled")
 	}
 
 	sessions, codes, err := initializeStores(cfg)
@@ -64,6 +73,8 @@ func run() error {
 			os.Exit(1)
 		}
 	}()
+
+	slog.Error("Just testing an error", "err", "OPh no!")
 
 	slog.Info("listening", "addr", cfg.ListenAddr)
 	<-ctx.Done()

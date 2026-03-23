@@ -23,6 +23,8 @@ type Config struct {
 	EncryptionKey string `environment:"MCP_PROXY_ENCRYPTION_KEY,"`
 	Scopes        string `environment:"MCP_PROXY_SCOPES,"`
 	Audience      string `environment:"MCP_PROXY_REMOTE_AUDIENCE,"`
+
+	AppInsightsConnectionString string `environment:"MCP_PROXY_APPINSIGHTS_CONNECTION_STRING,"`
 }
 
 func (c Config) UseTableStorage() bool {
