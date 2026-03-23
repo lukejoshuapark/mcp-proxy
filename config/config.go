@@ -21,6 +21,7 @@ type Config struct {
 	AzureStorageKey     string `environment:"MCP_PROXY_AZURE_STORAGE_KEY,"`
 
 	EncryptionKey string `environment:"MCP_PROXY_ENCRYPTION_KEY,"`
+	Scopes        string `environment:"MCP_PROXY_SCOPES,"`
 }
 
 func (c Config) UseTableStorage() bool {

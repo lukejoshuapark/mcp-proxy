@@ -50,6 +50,7 @@ All configuration is via environment variables.
 | `MCP_PROXY_AZURE_STORAGE_ACCOUNT` | *(unset)* | Azure Storage account name. When set (along with `MCP_PROXY_AZURE_STORAGE_KEY`), the proxy uses Azure Table Storage for sessions and authorization codes. When omitted, an in-memory store is used — suitable for single-instance deployments and development. |
 | `MCP_PROXY_AZURE_STORAGE_KEY` | *(unset)* | Azure Storage account key. Required when `MCP_PROXY_AZURE_STORAGE_ACCOUNT` is set. |
 | `MCP_PROXY_ENCRYPTION_KEY` | *(unset)* | A 32-byte key encoded as raw-URL-base64 (no padding). When set, authorization codes stored in Azure Table Storage are encrypted at rest with AES-256-GCM. Has no effect when using the in-memory store. |
+| `MCP_PROXY_SCOPES` | *(unset)* | Space-separated OAuth scopes to request from the upstream provider (e.g. `openid profile email`). When set, this value is used regardless of what the MCP client requests. When omitted, the client-supplied scope is forwarded as-is. |
 | `MCP_PROXY_PRETTY` | *(unset)* | When set to any non-empty value, logs are emitted in human-readable text format instead of JSON. |
 
 ## Security Features

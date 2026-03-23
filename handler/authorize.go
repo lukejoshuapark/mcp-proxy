@@ -67,7 +67,9 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	rq.Set("client_id", s.Config.RemoteClientID)
 	rq.Set("redirect_uri", s.Config.PublicURL+"/callback")
 	rq.Set("state", sessionKey)
-	if scope != "" {
+	if s.Config.Scopes != "" {
+		rq.Set("scope", s.Config.Scopes)
+	} else if scope != "" {
 		rq.Set("scope", scope)
 	}
 	remoteURL.RawQuery = rq.Encode()
