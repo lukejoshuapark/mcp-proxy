@@ -2,6 +2,8 @@
 
 # mcp-proxy
 
+![Docker](https://img.shields.io/docker/v/lukejoshuapark/mcp-proxy)
+
 An OAuth 2.0 proxy for [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers. It sits between MCP clients and an upstream MCP server, presenting itself as an OAuth authorization server to clients while delegating actual authentication to an upstream OAuth provider.
 
 ## How It Works
