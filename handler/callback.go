@@ -63,7 +63,7 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenResp, err := s.exchangeRemoteCode(remoteCode)
+	tokenResp, err := s.exchangeRemoteCode(remoteCode, session.UpstreamCodeVerifier)
 	if err != nil {
 		slog.Error("failed to exchange remote code", "error", err)
 		hu.Error(w, http.StatusBadGateway, "server_error", "failed to exchange code with remote provider")
@@ -95,13 +95,14 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL.String(), http.StatusFound)
 }
 
-func (s *Server) exchangeRemoteCode(code string) ([]byte, error) {
+func (s *Server) exchangeRemoteCode(code, codeVerifier string) ([]byte, error) {
 	data := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
 		"redirect_uri":  {s.Config.PublicURL + "/callback"},
 		"client_id":     {s.Config.RemoteClientID},
 		"client_secret": {s.Config.RemoteClientSecret},
+		"code_verifier": {codeVerifier},
 	}
 
 	resp, err := s.HTTPClient.PostForm(s.Config.RemoteTokenURL, data)

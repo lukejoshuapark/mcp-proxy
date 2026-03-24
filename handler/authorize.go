@@ -47,13 +47,16 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	upstreamVerifier, upstreamChallenge := hu.GeneratePKCE()
+
 	sessionKey := hu.RandomID(16)
 	s.Sessions.Set("sessions", sessionKey, AuthSession{
-		ClientID:      clientID,
-		RedirectURI:   redirectURI,
-		State:         state,
-		CodeChallenge: codeChallenge,
-		CreatedAt:     time.Now(),
+		ClientID:             clientID,
+		RedirectURI:          redirectURI,
+		State:                state,
+		CodeChallenge:        codeChallenge,
+		UpstreamCodeVerifier: upstreamVerifier,
+		CreatedAt:            time.Now(),
 	})
 
 	remoteURL, err := url.Parse(s.Config.RemoteAuthURL)
@@ -72,6 +75,8 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	} else if scope != "" {
 		rq.Set("scope", scope)
 	}
+	rq.Set("code_challenge", upstreamChallenge)
+	rq.Set("code_challenge_method", "S256")
 	if s.Config.Audience != "" {
 		rq.Set("audience", s.Config.Audience)
 	}

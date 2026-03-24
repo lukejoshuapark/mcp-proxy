@@ -37,11 +37,12 @@ type metadataCacheEntry struct {
 }
 
 type AuthSession struct {
-	ClientID      string    `json:"client_id"`
-	RedirectURI   string    `json:"redirect_uri"`
-	State         string    `json:"state"`
-	CodeChallenge string    `json:"code_challenge"`
-	CreatedAt     time.Time `json:"created_at"`
+	ClientID             string    `json:"client_id"`
+	RedirectURI          string    `json:"redirect_uri"`
+	State                string    `json:"state"`
+	CodeChallenge        string    `json:"code_challenge"`
+	UpstreamCodeVerifier string    `json:"upstream_code_verifier"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 type StoredCode struct {

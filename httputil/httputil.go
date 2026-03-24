@@ -46,6 +46,13 @@ func VerifyPKCE(verifier, challenge string) bool {
 	return subtle.ConstantTimeCompare([]byte(computed), []byte(challenge)) == 1
 }
 
+func GeneratePKCE() (verifier, challenge string) {
+	verifier = RandomID(32)
+	h := sha256.Sum256([]byte(verifier))
+	challenge = base64.RawURLEncoding.EncodeToString(h[:])
+	return verifier, challenge
+}
+
 func NewHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 30 * time.Second,
