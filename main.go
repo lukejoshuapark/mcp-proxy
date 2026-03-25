@@ -74,8 +74,6 @@ func run(logHandler slog.Handler) error {
 		}
 	}()
 
-	slog.Error("Just testing an error", "err", "OPh no!")
-
 	slog.Info("listening", "addr", cfg.ListenAddr)
 	<-ctx.Done()
 	slog.Info("shutting down gracefully")
